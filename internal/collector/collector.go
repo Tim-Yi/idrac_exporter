@@ -633,7 +633,7 @@ func Reset(target string) {
 	mu.Unlock()
 }
 
-func GetCollector(target string) (*Collector, error) {
+func GetCollector(target string, module string) (*Collector, error) {
 	mu.Lock()
 	collector, ok := collectors[target]
 	if !ok {
@@ -648,7 +648,7 @@ func GetCollector(target string) (*Collector, error) {
 
 	// Try to instantiate a new Redfish host
 	if collector.client == nil {
-		host := config.Config.GetHostCfg(target)
+		host := config.Config.GetHostCfg(target, module)
 		if host == nil {
 			return nil, fmt.Errorf("failed to get host information")
 		}

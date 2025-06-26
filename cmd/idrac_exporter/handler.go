@@ -70,9 +70,14 @@ func metricsHandler(rsp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	log.Debug("Handling request from %s for host %s", req.Host, target)
+	module := req.URL.Query().Get("module")
+	if module == "" {
+		module = "default"
+	}
 
-	c, err := collector.GetCollector(target)
+	log.Debug("Handling request from %s for host %s module %s", req.Host, target, module)
+
+	c, err := collector.GetCollector(target, module)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Error instantiating metrics collector for host %s: %v", target, err)
 		log.Error("%v", errorMsg)

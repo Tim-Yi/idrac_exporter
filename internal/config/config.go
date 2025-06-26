@@ -14,15 +14,15 @@ var Config RootConfig = RootConfig{
 	Hosts: make(map[string]*HostConfig),
 }
 
-func (c *RootConfig) GetHostCfg(target string) *HostConfig {
+func (c *RootConfig) GetHostCfg(target string, module string) *HostConfig {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
 	hostCfg, ok := c.Hosts[target]
 	if !ok {
-		def, ok := c.Hosts["default"]
+		def, ok := c.Hosts[module]
 		if !ok {
-			log.Error("Could not find login information for host: %s", target)
+			log.Error("Could not find login information for host %s module %s", target, module)
 			return nil
 		}
 		hostCfg = &HostConfig{
