@@ -206,6 +206,11 @@ type Fan struct {
 	UpperThresholdCritical    any          `json:"UpperThresholdCritical"`
 	UpperThresholdFatal       any          `json:"UpperThresholdFatal"`
 	UpperThresholdNonCritical any          `json:"UpperThresholdNonCritical"`
+	Oem                       struct {
+		Supermicro *struct {
+			Details map[string]string `json:"Details"`
+		} `json:"Supermicro"`
+	} `json:"Oem"`
 }
 
 func (f *Fan) GetName() string {
@@ -251,6 +256,11 @@ type Temperature struct {
 	UpperThresholdFatal       float64 `json:"UpperThresholdFatal"`
 	UpperThresholdNonCritical float64 `json:"UpperThresholdNonCritical"`
 	Status                    Status  `json:"Status"`
+	Oem                       struct {
+		Supermicro *struct {
+			Details map[string]string `json:"Details"`
+		} `json:"Supermicro"`
+	} `json:"Oem"`
 }
 
 func (t *Temperature) GetId(fallback int) string {
