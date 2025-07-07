@@ -190,6 +190,15 @@ func (r *Redfish) RefreshSession() bool {
 			r.session.id = ""
 			return false
 		}
+	} else if resp.StatusCode != http.StatusOK {
+		log.Error("Unexpected status code from %q: %s", url, resp.Status)
+		if resp.StatusCode == http.StatusForbidden {
+			log.Error("Session authentication disabled for %s due to forbidden access", r.hostname)
+		}
+		r.session.disabled = true
+		r.session.token = ""
+		r.session.id = ""
+		return false
 	}
 
 	return true
@@ -273,7 +282,7 @@ func (r *Redfish) Exists(path string) bool {
 		return false
 	}
 
-	if resp.StatusCode >= 400 && resp.StatusCode <= 499 {
+	if resp.StatusCode >= 400 && resp.StatusCode <= 500 {
 		return false
 	}
 

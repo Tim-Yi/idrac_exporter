@@ -27,11 +27,23 @@ func (c *RootConfig) GetHostCfg(target string, module string) *HostConfig {
 		}
 		hostCfg = &HostConfig{
 			Hostname: target,
+			Module:   module,
 			Scheme:   def.Scheme,
 			Username: def.Username,
 			Password: def.Password,
 		}
 		c.Hosts[target] = hostCfg
+	} else if hostCfg.Module != module {
+		def, ok := c.Hosts[module]
+		if !ok {
+			log.Error("Host %s has a different module (%s) than requested (%s), using module %s", target, hostCfg.Module, module, hostCfg.Module)
+			return hostCfg
+		}
+		log.Warn("Host %s has a different module (%s) than requested (%s), using module %s", target, hostCfg.Module, module, module)
+		hostCfg.Module = module
+		hostCfg.Scheme = def.Scheme
+		hostCfg.Username = def.Username
+		hostCfg.Password = def.Password
 	}
 
 	return hostCfg
@@ -105,6 +117,7 @@ func ReadConfig(filename string) {
 		}
 
 		v.Hostname = k
+		v.Module = k
 	}
 
 	// events section

@@ -478,7 +478,7 @@ func (collector *Collector) Describe(ch chan<- *prometheus.Desc) {
 func (collector *Collector) Collect(ch chan<- prometheus.Metric) {
 	var wg sync.WaitGroup
 
-	collector.client.redfish.RefreshSession()
+	// collector.client.redfish.RefreshSession()
 	collect := &config.Config.Collect
 
 	if collect.System {
@@ -657,6 +657,12 @@ func GetCollector(target string, module string) (*Collector, error) {
 			return nil, fmt.Errorf("failed to instantiate new client")
 		} else {
 			collector.client = c
+		}
+	} else {
+		// If the client is already instantiated, refresh the session
+		if !collector.client.redfish.RefreshSession() {
+			collector.client = nil
+			return nil, fmt.Errorf("failed to refresh Redfish session for %s", target)
 		}
 	}
 

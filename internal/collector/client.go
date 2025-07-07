@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/mrlhansen/idrac_exporter/internal/config"
+	"github.com/mrlhansen/idrac_exporter/internal/log"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -46,8 +47,12 @@ func NewClient(h *config.HostConfig) *Client {
 		),
 	}
 
-	client.redfish.CreateSession()
-	ok := client.findAllEndpoints()
+	ok := client.redfish.CreateSession()
+	if !ok {
+		log.Error("Failed to create Redfish session for %s", h.Hostname)
+		return nil
+	}
+	ok = client.findAllEndpoints()
 	if !ok {
 		client.redfish.DeleteSession()
 		return nil
@@ -75,7 +80,21 @@ func (client *Client) findAllEndpoints() bool {
 		return false
 	}
 
+	if len(group.Members) == 0 {
+		log.Error("No systems found on %s", client.redfish.hostname)
+		return false
+	}
 	client.systemPath = group.Members[0].OdataId
+	if len(group.Members) > 1 {
+		for _, m := range group.Members {
+			if m.OdataId == "/redfish/v1/Systems/1" ||
+				m.OdataId == "/redfish/v1/Systems/System.Embedded.1" ||
+				m.OdataId == "/redfish/v1/Systems/Self" {
+				client.systemPath = m.OdataId
+				break
+			}
+		}
+	}
 
 	// Chassis
 	ok = client.redfish.Get(root.Chassis.OdataId, &group)
@@ -83,8 +102,22 @@ func (client *Client) findAllEndpoints() bool {
 		return false
 	}
 
+	if len(group.Members) == 0 {
+		log.Error("No chassis found on %s", client.redfish.hostname)
+		return false
+	}
+	chassisPath := group.Members[0].OdataId
+	if len(group.Members) > 1 {
+		chassisOdataId := strings.Replace(client.systemPath, "/Systems/", "/Chassis/", 1)
+		for _, m := range group.Members {
+			if m.OdataId == chassisOdataId {
+				chassisPath = m.OdataId
+				break
+			}
+		}
+	}
 	// Thermal and Power
-	ok = client.redfish.Get(group.Members[0].OdataId, &chassis)
+	ok = client.redfish.Get(chassisPath, &chassis)
 	if !ok {
 		return false
 	}
@@ -117,7 +150,7 @@ func (client *Client) findAllEndpoints() bool {
 		client.vendor = INVENTEC
 	} else if strings.Contains(m, "fujitsu") {
 		client.vendor = FUJITSU
-	} else if strings.Contains(m, "supermicro") {
+	} else if strings.Contains(m, "supermicro") || strings.HasPrefix(m, "fs") {
 		client.vendor = SUPERMICRO
 	}
 
@@ -162,8 +195,10 @@ func (client *Client) findAllEndpoints() bool {
 		if strings.Contains(root.Name, "HP RESTful") {
 			client.memoryPath = "/redfish/v1/Systems/1/Memory/"
 			client.storagePath = "/redfish/v1/Systems/1/SmartStorage/ArrayControllers/"
-			client.eventPath = ""
 			client.version = 4
+		}
+		if !client.redfish.Exists(client.eventPath) {
+			client.eventPath = ""
 		}
 	}
 

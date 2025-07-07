@@ -7,6 +7,7 @@ type HostConfig struct {
 	Password string `yaml:"password"`
 	Scheme   string `yaml:"scheme"`
 	Hostname string
+	Module   string
 }
 
 type CollectConfig struct {
