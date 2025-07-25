@@ -1,6 +1,7 @@
 package collector
 
 import (
+	"encoding/json"
 	"strconv"
 )
 
@@ -42,6 +43,35 @@ func (m *OdataSlice) GetLinks() []string {
 	}
 
 	return list
+}
+
+// Define a custom type that can unmarshal either Odata or OdataSlice
+type OdataOrSlice struct {
+	Slice   OdataSlice
+	Single  Odata
+	IsSlice bool
+}
+
+func (o *OdataOrSlice) UnmarshalJSON(data []byte) error {
+	// Try to unmarshal as OdataSlice
+	var slice OdataSlice
+	if err := json.Unmarshal(data, &slice); err == nil && len(slice) > 0 {
+		o.Slice = slice
+		o.IsSlice = true
+		return nil
+	}
+	// Try to unmarshal as Odata
+	var single Odata
+	if err := json.Unmarshal(data, &single); err == nil && single.OdataId != "" {
+		o.Single = single
+		o.IsSlice = false
+		return nil
+	}
+	// If both fail, treat as empty
+	o.Slice = nil
+	o.Single = Odata{}
+	o.IsSlice = false
+	return nil
 }
 
 // Status is a common structure used in any entity with a status
@@ -175,6 +205,15 @@ type ChassisResponse struct {
 		IntrusionSensorNumber int    `json:"IntrusionSensorNumber"`
 		IntrusionSensorReArm  string `json:"IntrusionSensorReArm"`
 	} `json:"PhysicalSecurity"`
+}
+
+type SensorsResponse struct {
+	Id           string  `json:"Id"`
+	Name         string  `json:"Name"`
+	Reading      float64 `json:"Reading"`
+	ReadingType  string  `json:"ReadingType"`
+	ReadingUnits string  `json:"ReadingUnits"`
+	Status       Status  `json:"Status"`
 }
 
 type ThermalResponse struct {
@@ -472,11 +511,11 @@ type SystemResponse struct {
 		Status               Status  `json:"Status"`
 		TotalSystemMemoryGiB float64 `json:"TotalSystemMemoryGiB"`
 	} `json:"MemorySummary"`
-	Model             string     `json:"Model"`
-	Name              string     `json:"Name"`
-	NetworkInterfaces Odata      `json:"NetworkInterfaces"`
-	PCIeDevices       OdataSlice `json:"PCIeDevices"`
-	PCIeFunctions     OdataSlice `json:"PCIeFunctions"`
+	Model             string       `json:"Model"`
+	Name              string       `json:"Name"`
+	NetworkInterfaces Odata        `json:"NetworkInterfaces"`
+	PCIeDevices       OdataOrSlice `json:"PCIeDevices"`
+	PCIeFunctions     OdataSlice   `json:"PCIeFunctions"`
 	ProcessorSummary  *struct {
 		Count                 int    `json:"Count"`
 		LogicalProcessorCount int    `json:"LogicalProcessorCount"`

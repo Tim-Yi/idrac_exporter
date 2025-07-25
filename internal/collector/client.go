@@ -20,6 +20,7 @@ const (
 	INVENTEC
 	FUJITSU
 	SUPERMICRO
+	QUANTA
 )
 
 type Client struct {
@@ -35,6 +36,7 @@ type Client struct {
 	eventPath   string
 	procPath    string
 	dellPath    string
+	sensorsPath []string
 }
 
 func NewClient(h *config.HostConfig) *Client {
@@ -107,6 +109,7 @@ func (client *Client) findAllEndpoints() bool {
 		return false
 	}
 	chassisPath := group.Members[0].OdataId
+	chassisMembers := group.Members.GetLinks()
 	if len(group.Members) > 1 {
 		chassisOdataId := strings.Replace(client.systemPath, "/Systems/", "/Chassis/", 1)
 		for _, m := range group.Members {
@@ -152,6 +155,8 @@ func (client *Client) findAllEndpoints() bool {
 		client.vendor = FUJITSU
 	} else if strings.Contains(m, "supermicro") || strings.HasPrefix(m, "fs") {
 		client.vendor = SUPERMICRO
+	} else if strings.Contains(m, "quanta") {
+		client.vendor = QUANTA
 	}
 
 	// Path for event log
@@ -202,10 +207,66 @@ func (client *Client) findAllEndpoints() bool {
 		}
 	}
 
+	if client.vendor == QUANTA {
+		// client.storagePath = system.Storage.OdataId
+		client.memoryPath = "/redfish/v1/Systems/HGX_Baseboard_0/Memory/"
+		client.networkPath = ""
+		client.thermalPath = ""
+		client.powerPath = ""
+		client.procPath = "/redfish/v1/Systems/HGX_Baseboard_0/Processors/"
+		client.eventPath = "/redfish/v1/Systems/HGX_Baseboard_0/LogServices/EventLog/Entries/"
+
+		for _, m := range chassisMembers {
+			ok = client.redfish.Get(m+"/Sensors/", &group)
+			if !ok {
+				return false
+			}
+			for _, s := range group.Members {
+				odataIdLower := strings.ToLower(s.OdataId)
+				if strings.Contains(odataIdLower, "temp") || strings.Contains(odataIdLower, "fan") {
+					client.sensorsPath = append(client.sensorsPath, s.OdataId)
+					log.Debug("Collect Quanta sensor path: %s", s.OdataId)
+				} else {
+					log.Debug("Ingore Quanta sensor path: %s", s.OdataId)
+				}
+			}
+		}
+	}
+
+	return true
+}
+
+func (client *Client) RefreshQuantaSensors(mc *Collector, ch chan<- prometheus.Metric) bool {
+	for _, p := range client.sensorsPath {
+		resp := SensorsResponse{}
+		ok := client.redfish.Get(p, &resp)
+		if !ok {
+			continue
+		}
+		if resp.Status.State != StateEnabled {
+			continue
+		}
+		if resp.Reading < 0 {
+			continue
+		}
+		switch resp.ReadingType {
+		case "Temperature":
+			mc.NewSensorsTemperature(ch, resp.Reading, resp.Id, resp.Name, strings.ToLower(resp.ReadingUnits))
+		case "Rotational", "Percent":
+			mc.NewSensorsFanSpeed(ch, resp.Reading, resp.Id, resp.Name, strings.ToLower(resp.ReadingUnits))
+			mc.NewSensorsFanHealth(ch, resp.Id, resp.Name, resp.Status.Health)
+		default:
+			log.Debug("Unknown sensor type %s for %s", resp.ReadingType, resp.Name)
+		}
+	}
 	return true
 }
 
 func (client *Client) RefreshSensors(mc *Collector, ch chan<- prometheus.Metric) bool {
+	if client.vendor == QUANTA {
+		return client.RefreshQuantaSensors(mc, ch)
+	}
+
 	resp := ThermalResponse{}
 	ok := client.redfish.Get(client.thermalPath, &resp)
 	if !ok {
@@ -509,6 +570,10 @@ func (client *Client) RefreshStorage(mc *Collector, ch chan<- prometheus.Metric)
 		ok = client.redfish.Get(c, &storage)
 		if !ok {
 			return false
+		}
+
+		if client.vendor == QUANTA && storage.Id != "1" {
+			continue
 		}
 
 		// iLO 4
